@@ -1,0 +1,9 @@
+[package]
+name = "gravityengine3d"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam = "0.33.12"
+numfmt = "1.2.0"
+rand = "0.10.3"
