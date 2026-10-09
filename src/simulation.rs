@@ -79,6 +79,17 @@ impl State {
         ke
     }
 
+    // Returns the total linear momentum of the system.
+    pub fn lm(&self) -> DVec3 {
+        let mut sum = DVec3::ZERO;
+
+        for i in 0..self.body_count() {
+            sum += self.vel[i] * self.mass[i];
+        }
+
+        sum
+    }
+
     pub fn init_energy(&self) -> f64 {
         self.init_energy
     }

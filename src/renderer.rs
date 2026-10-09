@@ -53,5 +53,10 @@ pub async fn render(state: &RenderState) {
     offset += 16.0;
     draw_text(format!("Variation: {:.2} J ({:.2}%)", var, var_percent), 16.0, offset, 16.0, WHITE);
 
+    let lm = state.sim.lm();
+
+    offset += 16.0 * 2.0;
+    draw_text(format!("Linear Momentum: ({:.2}, {:.2}, {:.2})", lm.x, lm.y, lm.z), 16.0, offset, 16.0, WHITE);
+
     next_frame().await;
 }
