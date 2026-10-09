@@ -1,13 +1,15 @@
 use glam::{ Vec3A};
+use macroquad::color::{Color, WHITE};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
+#[derive(Clone)]
 pub struct State {
     // Forces
     pub g: f32,
     pub eps: f32,
     pub delta: f32,
 
-    // Massive
+    // Particles
     pub pos_x: Vec<f32>,
     pub pos_y: Vec<f32>,
     pub pos_z: Vec<f32>,
@@ -16,34 +18,42 @@ pub struct State {
     pub mass: Vec<f32>,
     mass_g: Vec<f32>,
 
-    // Lightweight (massless)
-    pub lw_pos_x: Vec<f32>,
-    pub lw_pos_y: Vec<f32>,
-    pub lw_pos_z: Vec<f32>,
-    pub lw_vel: Vec<Vec3A>,
-    pub lw_acc: Vec<Vec3A>,
+    // Tracers
+    pub trc_pos_x: Vec<f32>,
+    pub trc_pos_y: Vec<f32>,
+    pub trc_pos_z: Vec<f32>,
+    pub trc_vel: Vec<Vec3A>,
+    pub trc_acc: Vec<Vec3A>,
+
+    // Rendering
+    pub size: Vec<f32>,
+    pub bdy_colour: Vec<Color>,
+    pub trc_colour: Vec<Color>,
 
     gpe: f64,
 }
 
 impl State {
-    pub fn new_default(n_msv: usize, n_lw: usize, g: f32, eps: f32, delta: f32) -> Self {
+    pub fn new_default(n_bdy: usize, n_trc: usize, g: f32, eps: f32, delta: f32) -> Self {
         State {
             g,
             eps,
             delta,
-            pos_x: vec![0.0f32; n_msv],
-            pos_y: vec![0.0f32; n_msv],
-            pos_z: vec![0.0f32; n_msv],
-            vel: vec![Vec3A::ZERO; n_msv],
-            acc: vec![Vec3A::ZERO; n_msv],
-            mass: vec![1.0; n_msv],
-            mass_g: vec![1.0; n_msv],
-            lw_pos_x: vec![0.0f32; n_lw],
-            lw_pos_y: vec![0.0f32; n_lw],
-            lw_pos_z: vec![0.0f32; n_lw],
-            lw_vel: vec![Vec3A::ZERO; n_lw],
-            lw_acc: vec![Vec3A::ZERO; n_lw],
+            pos_x: vec![0.0f32; n_bdy],
+            pos_y: vec![0.0f32; n_bdy],
+            pos_z: vec![0.0f32; n_bdy],
+            vel: vec![Vec3A::ZERO; n_bdy],
+            acc: vec![Vec3A::ZERO; n_bdy],
+            mass: vec![1.0; n_bdy],
+            mass_g: vec![1.0; n_bdy],
+            size: vec![0.0f32; n_bdy],
+            trc_pos_x: vec![0.0f32; n_trc],
+            trc_pos_y: vec![0.0f32; n_trc],
+            trc_pos_z: vec![0.0f32; n_trc],
+            trc_vel: vec![Vec3A::ZERO; n_trc],
+            trc_acc: vec![Vec3A::ZERO; n_trc],
+            bdy_colour: vec![WHITE; n_bdy],
+            trc_colour: vec![WHITE; n_trc],
             gpe: 0.0,
         }
     }
@@ -57,7 +67,7 @@ impl State {
     pub fn ke(&self) -> f64 {
         let mut ke = 0.0f64;
 
-        for i in 0..self.msv_body_count() {
+        for i in 0..self.body_count() {
             let mass = self.mass[i];
             let velocity = self.vel[i];
             ke += 0.5 * mass as f64 * velocity.length_squared() as f64;
@@ -67,29 +77,29 @@ impl State {
     }
 
     /// Returns the number of massive (that have mass) particles.
-    pub fn msv_body_count(&self) -> usize {
+    pub fn body_count(&self) -> usize {
         self.pos_x.len()
     }
 
     /// Returns the number of lightweight (massless) particles.
-    pub fn lw_body_count(&self) -> usize {
-        self.lw_pos_x.len()
+    pub fn tracer_count(&self) -> usize {
+        self.trc_pos_x.len()
     }
 
     /// Returns the body count of the simulation.
-    pub fn body_count(&self) -> usize {
-        self.lw_body_count() + self.msv_body_count()
+    pub fn particle_count(&self) -> usize {
+        self.tracer_count() + self.body_count()
     }
 
     /// Computes the number of massive-massive and lightweight-massive interactions.
     pub fn ops_per_step(&self) -> u128 {
-        let msv_ops = self.msv_body_count() as u128 * self.msv_body_count() as u128;
-        msv_ops + self.msv_body_count() as u128 * self.lw_body_count() as u128
+        let msv_ops = self.body_count() as u128 * self.body_count() as u128;
+        msv_ops + self.body_count() as u128 * self.tracer_count() as u128
     }
 
     /// Multiplies the masses of massive particles by gravity, so it doesn't need to be computed during the accelerate pass.
     fn scale_masses(&mut self) {
-        for i in 0..self.msv_body_count() {
+        for i in 0..self.body_count() {
             self.mass_g[i] = self.mass[i] * self.g;
         }
     }
@@ -97,6 +107,9 @@ impl State {
 
 pub fn init(state: &mut State) {
     state.scale_masses();
+    for i in 0..state.body_count() {
+        state.size[i] = state.mass[i].sqrt();
+    }
     accelerate_mt(state);
 }
 
@@ -108,28 +121,28 @@ pub fn step_leapfrog(state: &mut State) {
 }
 
 fn half_kick(state: &mut State) {
-    for i in 0..state.msv_body_count() {
+    for i in 0..state.body_count() {
         state.vel[i] += state.acc[i] * state.delta * 0.5;
     }
-    for i in 0..state.lw_body_count() {
-        state.lw_vel[i] += state.lw_acc[i] * state.delta * 0.5;
+    for i in 0..state.tracer_count() {
+        state.trc_vel[i] += state.trc_acc[i] * state.delta * 0.5;
     }
 }
 
 fn drift(state: &mut State) {
-    for i in 0..state.msv_body_count() {
+    for i in 0..state.body_count() {
         let vel = state.vel[i];
         let delta = state.delta;
         state.pos_x[i] += vel.x * delta;
         state.pos_y[i] += vel.y * delta;
         state.pos_z[i] += vel.z * delta;
     }
-    for i in 0..state.lw_body_count() {
-        let vel = state.lw_vel[i];
+    for i in 0..state.tracer_count() {
+        let vel = state.trc_vel[i];
         let delta = state.delta;
-        state.lw_pos_x[i] += vel.x * delta;
-        state.lw_pos_y[i] += vel.y * delta;
-        state.lw_pos_z[i] += vel.z * delta;
+        state.trc_pos_x[i] += vel.x * delta;
+        state.trc_pos_y[i] += vel.y * delta;
+        state.trc_pos_z[i] += vel.z * delta;
     }
 }
 
@@ -139,27 +152,27 @@ fn accelerate_mt(state: &mut State) {
     let base_mass = &state.mass;
     let mass_g = &state.mass_g;
 
-    let px = state.pos_x.as_slice();
-    let py = state.pos_y.as_slice();
-    let pz = state.pos_z.as_slice();
+    let bx = state.pos_x.as_slice();
+    let by = state.pos_y.as_slice();
+    let bz = state.pos_z.as_slice();
 
     let gpe_twice: f64 = state.acc.par_iter_mut()
         .enumerate()
         .map(|(i, a)| {
-            let (ix, iy, iz) = (px[i], py[i], pz[i]);
-            attract(a, ix, iy, iz, px, py, pz, mass_g, eps2) * -base_mass[i] as f64
+            let (ix, iy, iz) = (bx[i], by[i], bz[i]);
+            attract(a, ix, iy, iz, bx, by, bz, mass_g, eps2) * -base_mass[i] as f64
         })
         .sum();
 
-    let lpx = state.lw_pos_x.as_slice();
-    let lpy = state.lw_pos_y.as_slice();
-    let lpz = state.lw_pos_z.as_slice();
+    let trc_x = state.trc_pos_x.as_slice();
+    let trc_y = state.trc_pos_y.as_slice();
+    let trc_z = state.trc_pos_z.as_slice();
 
-    state.lw_acc.par_iter_mut()
+    state.trc_acc.par_iter_mut()
         .enumerate()
         .for_each(|(i, a)| {
-            let (ix, iy, iz) = (lpx[i], lpy[i], lpz[i]);
-            attract(a, ix, iy, iz, px, py, pz, mass_g, eps2);
+            let (ix, iy, iz) = (trc_x[i], trc_y[i], trc_z[i]);
+            attract(a, ix, iy, iz, bx, by, bz, mass_g, eps2);
         });
 
     state.gpe = gpe_twice * 0.5;

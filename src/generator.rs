@@ -1,66 +1,85 @@
-use std::f32::consts::TAU;
+use std::{f32::consts::TAU, ops::Range};
 
 use glam::Vec3A;
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 
 use crate::simulation::State;
 
-pub fn orbital_disk_2d(state: &mut State, n: usize, nlw: usize, g: f32, seed: u64, star_mass: f32) {
-    let mut rng = StdRng::seed_from_u64(seed);
+pub struct OrbitalDiskConfig {
+    pub particles: usize,
+    pub tracers: usize,
+    pub gravity: f32,
+    pub star_mass: f32,
+    pub dist_range: Range<f32>,
+    pub mass_range: Range<f32>,
+    pub seed: u64
+}
 
-    let min: f32 = 48.0;
-    let max: f32 = 128.0;
+pub fn simple_disc(state: &mut State, config: OrbitalDiskConfig) {
+    let mut rng = StdRng::seed_from_u64(config.seed);
 
-    if n > 0 {
-       state.mass[0] = star_mass;
+    let star_r = config.star_mass.sqrt();
+    let min: f32 = star_r + config.dist_range.start;
+    let max: f32 = star_r + config.dist_range.end;
+
+    if config.particles > 0 {
+       state.mass[0] = config.star_mass;
     }
-    for i in 1..n {
+    for i in 1..config.particles {
         let angle: f32 = rng.random_range(0.0..TAU);
         let dist: f32 = rng.random_range(min * min..=max * max).sqrt();
-        let x = angle.cos() * dist;
-        let y = angle.sin() * dist;
+        let (x, y) = (angle.cos() * dist, angle.sin() * dist);
+        let mass = rng.random_range(config.mass_range.clone());
         state.pos_x[i] = x;
         state.pos_y[i] = y;
-        state.mass[i] = rng.random_range(1.0..=3.0);
-        state.vel[i] = orbital_velocity_2d(g, Vec3A::new(state.pos_x[i], state.pos_y[i], state.pos_z[i]), Vec3A::ZERO, star_mass)
+        state.mass[i] = mass;
+        state.vel[i] = orbital_velocity(config.gravity, Vec3A::new(x, y, state.pos_z[i]), Vec3A::ZERO, mass, config.star_mass)
     }
 
-    for i in 0..nlw {
+    for i in 0..config.tracers {
         let angle: f32 = rng.random_range(0.0..TAU);
         let dist: f32 = rng.random_range(min * min..=max * max).sqrt();
         let x = angle.cos() * dist;
         let y = angle.sin() * dist;
-        state.lw_pos_x[i] = x;
-        state.lw_pos_y[i] = y;
-        state.lw_vel[i] = orbital_velocity_2d(g, Vec3A::new(state.lw_pos_x[i], state.lw_pos_y[i], state.lw_pos_z[i]), Vec3A::ZERO, star_mass)
+        state.trc_pos_x[i] = x;
+        state.trc_pos_y[i] = y;
+        state.trc_vel[i] = orbital_velocity(config.gravity, Vec3A::new(state.trc_pos_x[i], state.trc_pos_y[i], state.trc_pos_z[i]), Vec3A::ZERO, 0.0, config.star_mass)
     }
 }
 
-fn orbital_velocity_2d(g: f32, child_pos: Vec3A, parent_pos: Vec3A, parent_mass: f32) -> Vec3A {
+pub struct StarSystemConfig {
+    pub particles: usize,
+    pub tracers: usize,
+    pub gravity: f32,
+    pub star_a_mass: f32,
+    pub star_b_mass: f32,
+    pub mass_range: f32,
+    pub seed: u64
+}
+
+pub fn star_system(state: &mut State, config: &StarSystemConfig) {
+    let mut rng = StdRng::seed_from_u64(config.seed);
+
+    state.pos_x[0] = 300.0;
+    state.pos_y[0] = 300.0;
+    state.pos_z[0] = 0.0;
+    state.mass[0] = config.star_a_mass;
+
+    state.pos_x[1] = -300.0;
+    state.pos_y[1] = -300.0;
+    state.pos_z[1] = 0.0;
+    state.mass[1] = config.star_b_mass;
+
+    state.vel[0] = orbital_velocity(config.gravity, Vec3A::new(300.0, 300.0, 0.0), Vec3A::new(-300.0, -300.0, 0.0), config.star_a_mass, config.star_b_mass);
+    state.vel[1] = orbital_velocity(config.gravity, Vec3A::new(-300.0, -300.0, 0.0), Vec3A::new(300.0, 300.0, 0.0), config.star_b_mass, config.star_a_mass);
+}
+
+fn orbital_velocity(gravity: f32, child_pos: Vec3A, parent_pos: Vec3A, child_mass: f32, parent_mass: f32) -> Vec3A {
     let d = child_pos - parent_pos;
     let r = d.length();
     let r_vec = d / r;
     let r_tan = Vec3A::new(-r_vec.y, r_vec.x, 0.0);
 
-    let speed = (g * parent_mass / r).sqrt();
+    let speed = (gravity * (parent_mass - child_mass) / r).sqrt();
     speed * r_tan
-}
-
-pub fn generate_random(state: &mut State, n: usize, nlw: usize, seed: u64) {
-    let mut rng = StdRng::seed_from_u64(seed);
-
-    let min = -128.0;
-    let max = 128.0;
-
-    for i in 0..n {
-        state.pos_x[i] = rng.random_range(min..=max);
-        state.pos_y[i] = rng.random_range(min..=max);
-        state.pos_z[i] = rng.random_range(min..=max);
-        state.mass[i] = rng.random_range(1.0..=3.0);
-    }
-    for i in 0..nlw {
-        state.lw_pos_x[i] = rng.random_range(min..=max);
-        state.lw_pos_y[i] = rng.random_range(min..=max);
-        state.lw_pos_z[i] = rng.random_range(min..=max);
-    }
 }

@@ -2,44 +2,45 @@ use macroquad::{camera::{Camera2D, set_camera, set_default_camera}, color::*, ma
 
 use crate::simulation::State;
 
-pub async fn render(state: &State, step_ms: f64, fps: f64, step: u32, max_steps: u32) {
+pub struct RenderState {
+    pub sim: State,
+    pub physics_time: f64,
+    pub fps: f64,
+}
+
+pub async fn render(state: &RenderState) {
     clear_background(BLACK);
     set_camera(&Camera2D {
-        zoom: vec2(0.0025, screen_width() / screen_height() * 0.0025),
+        zoom: vec2(0.0008, screen_width() / screen_height() * 0.0008),
         ..Default::default()
     });
 
-    for i in 0..state.msv_body_count() {
-        draw_poly(state.pos_x[i], state.pos_y[i], 8, state.mass[i].sqrt(), 0.0, WHITE);
-    } for i in 0..state.lw_body_count() {
-        draw_poly(state.lw_pos_x[i], state.lw_pos_y[i], 8, 0.2, 0.0, YELLOW);
+    for i in 0..state.sim.body_count() {
+        draw_poly(state.sim.pos_x[i], state.sim.pos_y[i], 16, state.sim.size[i], 0.0, state.sim.bdy_colour[i]);
+    } for i in 0..state.sim.tracer_count() {
+        draw_poly(state.sim.trc_pos_x[i], state.sim.trc_pos_y[i], 8, 1.0, 0.0, state.sim.trc_colour[i]);
     }
 
     set_default_camera();
 
-    let ke = state.ke();
-    let gpe = state.gpe();
+    let ke = state.sim.ke();
+    let gpe = state.sim.gpe();
     let total = ke + gpe;
 
     let mut offset: f32 = 24.0;
-    draw_text("Gravity Engine", 16.0, offset, 16.0, WHITE);
+    draw_text(format!("Gravity Engine (\"{}\")", crate::version::VERSION), 16.0, offset, 16.0, WHITE);
 
     offset += 16.0 * 2.0;
-    if max_steps == 0 {
-        draw_text(format!("{:.2} fps", fps), 16.0, offset, 16.0, WHITE);
-        offset += 16.0;
-    } else {
-        draw_text(format!("Step {} / {}", step, max_steps), 16.0, offset, 16.0, WHITE);
-        offset += 16.0;
-        //draw_text(format!("ETA {:.2}s", fps), 16.0, offset, 16.0, WHITE);
-        //offset += 16.0;
-    }
+    draw_text(format!("{:.2} fps", state.fps), 16.0, offset, 16.0, WHITE);
+    offset += 16.0;
 
-    draw_text(format!("{:.2}ms per step", step_ms), 16.0, offset, 16.0, WHITE);
+    draw_text(format!("{:.2}ms per step", state.physics_time), 16.0, offset, 16.0, WHITE);
     offset += 16.0;
-    draw_text(format!("{} + {} particles", state.msv_body_count(), state.lw_body_count()), 16.0, offset, 16.0, WHITE);
+    draw_text(format!("{} bodies", state.sim.body_count()), 16.0, offset, 16.0, WHITE);
     offset += 16.0;
-    draw_text(format!("{} interactions", state.ops_per_step()), 16.0, offset, 16.0, WHITE);
+    draw_text(format!("{} tracers", state.sim.tracer_count()), 16.0, offset, 16.0, WHITE);
+    offset += 16.0;
+    draw_text(format!("{} interactions", state.sim.ops_per_step()), 16.0, offset, 16.0, WHITE);
     offset += 16.0 * 2.0;
     draw_text(format!("KE: {:.2} J", ke), 16.0, offset, 16.0, WHITE);
     offset += 16.0;

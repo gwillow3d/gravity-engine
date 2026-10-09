@@ -1,44 +1,46 @@
-use std::{fs::File, io::{BufWriter, Write}, time::{self, Instant}};
+use std::time::{self, Instant};
+use log::info;
 use numfmt::{Formatter, Precision, Scales};
 use clap::Parser;
 
+use crate::{generator::*, renderer::RenderState};
+
 mod simulation;
-mod pointcache2;
 mod generator;
 mod renderer;
+mod version;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short='n', default_value_t = 1024)]
-    body_count: u32,
-    #[arg(long="nlw", default_value_t = 0)]
-    lw_count: u32,
-    #[arg(short='s', long="steps", default_value_t = 0)]
-    duration: u32,
+    #[arg(short='n', long="bodies", default_value_t = 1024)]
+    n_bodies: usize,
+    #[arg(short='t', long="tracers", default_value_t = 0)]
+    n_tracers: usize,
     #[arg(short='g', long="gravity", default_value_t = 1.14)]
     gravity: f32,
     #[arg(short='d', long="delta", default_value_t = 0.01)]
-    timestep: f32,
+    delta: f32,
     #[arg(short='e', long="epsilon", default_value_t = 1.0)]
-    softening: f32,
+    epsilon: f32,
     #[arg(long="seed", default_value_t = 21177)]
     seed: u64,
     #[arg(long="debug", default_value_t = false)]
     debug: bool
 }
 
-#[macroquad::main("Gravity Engine 3D")]
+#[macroquad::main("Gravity Engine")]
 async fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     let args = Args::parse();
 
-    let body_count = args.body_count;
-    let lw_count = args.lw_count;
-    let duration = args.duration;
+    let n_bodies = args.n_bodies;
+    let n_tracers = args.n_tracers;
     let gravity = args.gravity;
-    let timestep = args.timestep;
-    let softening = args.softening;
-    let is_debug = args.debug;
+    let delta = args.delta;
+    let epsilon = args.epsilon;
+    let debug = args.debug;
     let seed = args.seed;
 
     let mut f = Formatter::new()
@@ -46,31 +48,35 @@ async fn main() -> std::io::Result<()> {
         .precision(Precision::Decimals(0))
         .scales(Scales::none());
 
-    println!("Gravity Engine 3D (Version {:?})\n", env!("CARGO_PKG_VERSION"));
+    info!("Gravity Engine (Version {:?})\n", version::VERSION);
 
-    let mut state = simulation::State::new_default(body_count as usize, lw_count as usize, gravity, softening, timestep);
-    generator::orbital_disk_2d(&mut state, body_count as usize, lw_count as usize, gravity, seed, 50000.0);
+    let mut state = simulation::State::new_default(n_bodies, n_tracers, gravity, epsilon, delta);
+    generator::simple_disc(&mut state, OrbitalDiskConfig {
+        particles: n_bodies,
+        tracers: n_tracers,
+        gravity,
+        star_mass: 150000.0,
+        dist_range: 150.0..400.0,
+        mass_range: 1.0..3.0,
+        seed: seed
+    });
+    
+    simulation::init(&mut state);
 
-    let op_count = state.ops_per_step();
-    let op_count_str = f.fmt2(op_count);
+    info!("Ready to start simulation!");
+    info!("Bodies: {n_bodies}");
+    info!("Tracers: {n_tracers}");
+    info!("Interactions: {}", f.fmt2(state.ops_per_step()));
+    info!("Gravity: {gravity}");
+    info!("Softening: {epsilon}m");
+    info!("Timestep: {delta}s");
 
-    println!("Ready to start simulation!");
-    println!("Particles: {}", body_count + lw_count);
-    println!("... massive: {body_count}");
-    println!("... lightweight: {lw_count}");
-    println!("Interactions: {op_count_str}");
-    println!("Duration: {duration} steps");
-    println!("Gravity: {gravity}");
-    println!("Softening: {softening}m");
-    println!("Timestep: {timestep}s");
-
-    println!();
+    // Counters
+    let mut fps_ctr = 0;
+    let mut ms_ctr = 0.0;
 
     let mut start = time::Instant::now();
-    let mut fps_accumulator = 0;
-    let mut ms_accumulator = 0.0;
     let mut fps = 0.0;
-    let mut step: u64 = 0;
 
     loop {
         let step_start = time::Instant::now();
@@ -81,40 +87,22 @@ async fn main() -> std::io::Result<()> {
         let gpe = state.gpe();
         let total = ke + gpe;
 
-        fps_accumulator += 1;
-        ms_accumulator += step_ms;
+        fps_ctr += 1;
+        ms_ctr += step_ms;
 
-        if fps_accumulator >= 15 {
+        if fps_ctr >= 15 {
             let avg_ms = Instant::now().duration_since(start).as_millis() as f64 / 15 as f64;
             fps = 1000.0f64 / avg_ms;
             start = Instant::now();
-            fps_accumulator = 0;
+            fps_ctr = 0;
         }
 
-        if ms_accumulator >= 3000.0 && is_debug {
-            let display_step = step + 1;
-            println!("[Ge3D] {display_step} / {duration} | Energy: {total} ({ke} KE, {gpe} GPE)");
+        if ms_ctr >= 3000.0 && debug {
+            info!("[Ge3D] Energy: {total} ({ke} KE, {gpe} GPE)");
 
-            ms_accumulator = 0.0;
+            ms_ctr = 0.0;
         }
 
-        renderer::render(&state, step_ms, fps, step as u32, duration).await;
-
-        step += 1;
+        renderer::render(&RenderState {sim: state.clone(), physics_time: step_ms, fps}).await;
     }
 }
-
-/*for i in 0..duration {
-        if i % sample_rate == 0 {
-            if write_pc2 {
-                for i in 0..state.msv_body_count() {
-                    let pos = Vec3A::new(state.pos_x[i], state.pos_y[i], state.pos_z[i]);
-                    pointcache2::write_point(&mut writer, &pos)?;
-                }
-                for i in 0..state.lw_body_count() {
-                    let pos = Vec3A::new(state.lw_pos_x[i], state.lw_pos_y[i], state.lw_pos_z[i]);
-                    pointcache2::write_point(&mut writer, &pos)?;
-                }
-            }
-        }
-    }*/
