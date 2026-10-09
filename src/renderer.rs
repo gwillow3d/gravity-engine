@@ -16,9 +16,9 @@ pub async fn render(state: &RenderState) {
     });
 
     for i in 0..state.sim.body_count() {
-        draw_poly(state.sim.pos_x[i], state.sim.pos_y[i], 16, state.sim.size[i], 0.0, state.sim.bdy_colour[i]);
+        draw_poly(state.sim.pos_x[i] as f32, state.sim.pos_y[i] as f32, 16, state.sim.size[i] as f32, 0.0, state.sim.bdy_colour[i]);
     } for i in 0..state.sim.tracer_count() {
-        draw_poly(state.sim.trc_pos_x[i], state.sim.trc_pos_y[i], 8, 1.0, 0.0, state.sim.trc_colour[i]);
+        draw_poly(state.sim.trc_pos_x[i] as f32, state.sim.trc_pos_y[i] as f32, 8, 1.0, 0.0, state.sim.trc_colour[i]);
     }
 
     set_default_camera();

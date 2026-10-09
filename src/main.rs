@@ -18,15 +18,17 @@ struct Args {
     #[arg(short='t', long="tracers", default_value_t = 0)]
     n_tracers: usize,
     #[arg(short='g', long="gravity", default_value_t = 1.14)]
-    gravity: f32,
+    gravity: f64,
     #[arg(short='d', long="delta", default_value_t = 0.01)]
-    delta: f32,
+    delta: f64,
     #[arg(short='e', long="epsilon", default_value_t = 1.0)]
-    epsilon: f32,
+    epsilon: f64,
     #[arg(long="seed", default_value_t = 21177)]
     seed: u64,
     #[arg(long="debug", default_value_t = false)]
-    debug: bool
+    debug: bool,
+    #[arg(long="f64", default_value_t = false)]
+    high_precision: bool,
 }
 
 #[macroquad::main("Gravity Engine")]
@@ -42,6 +44,7 @@ async fn main() -> std::io::Result<()> {
     let epsilon = args.epsilon;
     let debug = args.debug;
     let seed = args.seed;
+    let high_precision = args.high_precision;
 
     let mut f = Formatter::new()
         .separator(',').unwrap()

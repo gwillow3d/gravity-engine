@@ -1580,6 +1580,7 @@ dependencies = [
  "glam 0.33.12",
  "log",
  "macroquad",
+ "num-traits",
  "numfmt",
  "rand",
  "rayon",
