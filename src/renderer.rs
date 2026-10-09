@@ -26,6 +26,9 @@ pub async fn render(state: &RenderState) {
     let ke = state.sim.ke();
     let gpe = state.sim.gpe();
     let total = ke + gpe;
+    let init = state.sim.init_energy();
+    let var = total - init;
+    let var_percent = ((total / init) - 1.0) * 100.0;
 
     let mut offset: f32 = 24.0;
     draw_text(format!("Gravity Engine (\"{}\")", crate::version::VERSION), 16.0, offset, 16.0, WHITE);
@@ -47,6 +50,8 @@ pub async fn render(state: &RenderState) {
     draw_text(format!("GPE: {:.2} J", gpe), 16.0, offset, 16.0, WHITE);
     offset += 16.0;
     draw_text(format!("Total: {:.2} J", total), 16.0, offset, 16.0, WHITE);
+    offset += 16.0;
+    draw_text(format!("Variation: {:.2} J ({:.2}%)", var, var_percent), 16.0, offset, 16.0, WHITE);
 
     next_frame().await;
 }

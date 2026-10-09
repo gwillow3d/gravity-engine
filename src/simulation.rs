@@ -1,5 +1,5 @@
 use glam::{ DVec3, Vec3A};
-use macroquad::color::{Color, WHITE};
+use macroquad::color::{Color, PURPLE, WHITE, YELLOW};
 use num_traits::Float;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
@@ -32,6 +32,7 @@ pub struct State {
     pub trc_colour: Vec<Color>,
 
     gpe: f64,
+    init_energy: f64
 }
 
 impl State {
@@ -53,9 +54,10 @@ impl State {
             trc_pos_z: vec![0.0; n_trc],
             trc_vel: vec![DVec3::ZERO; n_trc],
             trc_acc: vec![DVec3::ZERO; n_trc],
-            bdy_colour: vec![WHITE; n_bdy],
-            trc_colour: vec![WHITE; n_trc],
+            bdy_colour: vec![PURPLE; n_bdy],
+            trc_colour: vec![YELLOW; n_trc],
             gpe: 0.0,
+            init_energy: 0.0
         }
     }
 
@@ -75,6 +77,10 @@ impl State {
         }
 
         ke
+    }
+
+    pub fn init_energy(&self) -> f64 {
+        self.init_energy
     }
 
     /// Returns the number of massive (that have mass) particles.
@@ -112,6 +118,7 @@ pub fn init(state: &mut State) {
         state.size[i] = state.mass[i].sqrt();
     }
     accelerate_mt(state);
+    state.init_energy = state.gpe() + state.ke();
 }
 
 pub fn step_leapfrog(state: &mut State) {
@@ -161,7 +168,7 @@ fn accelerate_mt(state: &mut State) {
         .enumerate()
         .map(|(i, a)| {
             let (ix, iy, iz) = (bx[i], by[i], bz[i]);
-            let (acc, gpe) = attract(ix, iy, iz, bx, by, bz, mass_g, eps2);
+            let (acc, gpe) = attract(i, ix, iy, iz, bx, by, bz, mass_g, eps2);
             *a = DVec3::new(acc[0], acc[1], acc[2]);
             gpe * -base_mass[i] as f64
         })
@@ -175,7 +182,7 @@ fn accelerate_mt(state: &mut State) {
         .enumerate()
         .for_each(|(i, a)| {
             let (ix, iy, iz) = (trc_x[i], trc_y[i], trc_z[i]);
-            let (acc, _gpe) = attract::<f64>(ix, iy, iz, bx, by, bz, mass_g, eps2);
+            let (acc, _gpe) = attract::<f64>(i, ix, iy, iz, bx, by, bz, mass_g, eps2);
             *a = DVec3::new(acc[0], acc[1], acc[2]);
         });
 
@@ -186,12 +193,13 @@ fn accelerate_mt(state: &mut State) {
 /// Returns the raw potential energy from the interactions.  
 /// To get the actual GPE, multiply by the base mass of `i` (not multiplied by gravity).
 #[inline]
-fn attract<T: Float>(ix: T, iy: T, iz: T, px: &[T], py: &[T], pz: &[T], m_g: &[T], eps2: T) -> ([T; 3], f64) {
+fn attract<T: Float>(i: usize, ix: T, iy: T, iz: T, px: &[T], py: &[T], pz: &[T], m_g: &[T], eps2: T) -> ([T; 3], f64) {
     let (mut ax , mut ay, mut az) = (T::zero(), T::zero(), T::zero());
 
     let mut bgpe = 0.0;
     
     for j in 0..px.len() {
+        if i == j { continue; }
         let jx = px[j]; let jy = py[j]; let jz = pz[j];
         let jm = m_g[j];
         
