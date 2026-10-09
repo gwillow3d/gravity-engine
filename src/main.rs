@@ -11,6 +11,8 @@ mod generator;
 mod renderer;
 mod version;
 
+const FPS_INTERVAL: u32 = 30;
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -96,8 +98,8 @@ async fn main() -> std::io::Result<()> {
         fps_ctr += 1;
         ms_ctr += step_ms;
 
-        if fps_ctr >= 15 {
-            let avg_ms = Instant::now().duration_since(start).as_millis() as f64 / 15 as f64;
+        if fps_ctr >= FPS_INTERVAL {
+            let avg_ms = Instant::now().duration_since(start).as_millis() as f64 / FPS_INTERVAL as f64;
             fps = 1000.0f64 / avg_ms;
             start = Instant::now();
             fps_ctr = 0;

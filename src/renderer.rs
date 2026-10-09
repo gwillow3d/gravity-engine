@@ -37,25 +37,28 @@ pub async fn render(state: &RenderState) {
     draw_text("Press F3 to show profiling", 16.0, offset, 16.0, GRAY);
 
     offset += 16.0 * 2.0;
-    draw_text(format!("{:.2} fps", state.fps), 16.0, offset, 16.0, WHITE);
+    let fps_colour = appropriate_colour(state.fps, 20.0, 30.0, 40.0, 50.0, 60.0);
+    draw_text(format!("{:.2} fps", state.fps), 16.0, offset, 16.0, fps_colour);
     
     if state.show_profiling {
         offset += 16.0;
-        draw_text(format!("{:.2}ms per step", state.physics_time), 16.0, offset, 16.0, WHITE);
+        let ms_colour = appropriate_colour(state.physics_time, 1000.0 / 20.0, 1000.0 / 30.0, 1000.0 / 40.0, 1000.0 / 50.0, 1000.0 / 60.0);
+        draw_text(format!("{:.2}ms per step", state.physics_time), 16.0, offset, 16.0, ms_colour);
         offset += 16.0;
         draw_text(format!("{} bodies", state.sim.body_count()), 16.0, offset, 16.0, WHITE);
         offset += 16.0;
         draw_text(format!("{} tracers", state.sim.tracer_count()), 16.0, offset, 16.0, WHITE);
         offset += 16.0;
         draw_text(format!("{} interactions", state.sim.ops_per_step()), 16.0, offset, 16.0, WHITE);
-        offset += 16.0 * 2.0;
+        offset += 16.0 * 2.0;   
         draw_text(format!("KE: {:.2} J", ke), 16.0, offset, 16.0, WHITE);
         offset += 16.0;
         draw_text(format!("GPE: {:.2} J", gpe), 16.0, offset, 16.0, WHITE);
         offset += 16.0;
         draw_text(format!("Total: {:.2} J", total), 16.0, offset, 16.0, WHITE);
         offset += 16.0;
-        draw_text(format!("Variation: {:.2} J ({:.2}%)", var, var_percent), 16.0, offset, 16.0, WHITE);
+        let var_colour = appropriate_colour(var_percent.abs(), 4.0, 2.0, 1.0, 0.5, 0.25);
+        draw_text(format!("Variation: {:.2} J ({:.2}%)", var, var_percent), 16.0, offset, 16.0, var_colour);
 
         let lm = state.sim.lm();
 
@@ -64,4 +67,33 @@ pub async fn render(state: &RenderState) {
     }
 
     next_frame().await;
+}
+
+fn appropriate_colour(number: f64, worst: f64, bad: f64, fine: f64, okay: f64, good: f64) -> Color {
+    if good > worst { // Higher is better
+        if number <= worst {
+            return RED;
+        } else if number <= bad {
+            return ORANGE;
+        } else if number <= fine {
+            return YELLOW;
+        } else if number <= okay {
+            return GREEN;
+        } else {
+            return LIME;
+        }
+    }
+    else {
+        if number <= good { // Lower is better
+            return LIME;
+        } else if number <= okay {
+            return GREEN;
+        } else if number <= fine {
+            return YELLOW;
+        } else if number <= bad {
+            return ORANGE;
+        } else {
+            return RED;
+        }
+    }
 }
