@@ -6,6 +6,7 @@ pub struct RenderState {
     pub sim: State,
     pub physics_time: f64,
     pub fps: f64,
+    pub show_profiling: bool,
 }
 
 pub async fn render(state: &RenderState) {
@@ -32,31 +33,35 @@ pub async fn render(state: &RenderState) {
 
     let mut offset: f32 = 24.0;
     draw_text(format!("Gravity Engine (\"{}\")", crate::version::VERSION), 16.0, offset, 16.0, WHITE);
+    offset += 16.0;
+    draw_text("Press F3 to show profiling", 16.0, offset, 16.0, GRAY);
 
     offset += 16.0 * 2.0;
     draw_text(format!("{:.2} fps", state.fps), 16.0, offset, 16.0, WHITE);
-    offset += 16.0;
+    
+    if state.show_profiling {
+        offset += 16.0;
+        draw_text(format!("{:.2}ms per step", state.physics_time), 16.0, offset, 16.0, WHITE);
+        offset += 16.0;
+        draw_text(format!("{} bodies", state.sim.body_count()), 16.0, offset, 16.0, WHITE);
+        offset += 16.0;
+        draw_text(format!("{} tracers", state.sim.tracer_count()), 16.0, offset, 16.0, WHITE);
+        offset += 16.0;
+        draw_text(format!("{} interactions", state.sim.ops_per_step()), 16.0, offset, 16.0, WHITE);
+        offset += 16.0 * 2.0;
+        draw_text(format!("KE: {:.2} J", ke), 16.0, offset, 16.0, WHITE);
+        offset += 16.0;
+        draw_text(format!("GPE: {:.2} J", gpe), 16.0, offset, 16.0, WHITE);
+        offset += 16.0;
+        draw_text(format!("Total: {:.2} J", total), 16.0, offset, 16.0, WHITE);
+        offset += 16.0;
+        draw_text(format!("Variation: {:.2} J ({:.2}%)", var, var_percent), 16.0, offset, 16.0, WHITE);
 
-    draw_text(format!("{:.2}ms per step", state.physics_time), 16.0, offset, 16.0, WHITE);
-    offset += 16.0;
-    draw_text(format!("{} bodies", state.sim.body_count()), 16.0, offset, 16.0, WHITE);
-    offset += 16.0;
-    draw_text(format!("{} tracers", state.sim.tracer_count()), 16.0, offset, 16.0, WHITE);
-    offset += 16.0;
-    draw_text(format!("{} interactions", state.sim.ops_per_step()), 16.0, offset, 16.0, WHITE);
-    offset += 16.0 * 2.0;
-    draw_text(format!("KE: {:.2} J", ke), 16.0, offset, 16.0, WHITE);
-    offset += 16.0;
-    draw_text(format!("GPE: {:.2} J", gpe), 16.0, offset, 16.0, WHITE);
-    offset += 16.0;
-    draw_text(format!("Total: {:.2} J", total), 16.0, offset, 16.0, WHITE);
-    offset += 16.0;
-    draw_text(format!("Variation: {:.2} J ({:.2}%)", var, var_percent), 16.0, offset, 16.0, WHITE);
+        let lm = state.sim.lm();
 
-    let lm = state.sim.lm();
-
-    offset += 16.0 * 2.0;
-    draw_text(format!("Linear Momentum: ({:.2}, {:.2}, {:.2})", lm.x, lm.y, lm.z), 16.0, offset, 16.0, WHITE);
+        offset += 16.0 * 2.0;
+        draw_text(format!("Linear Momentum: ({:.2}, {:.2}, {:.2})", lm.x, lm.y, lm.z), 16.0, offset, 16.0, WHITE);
+    }
 
     next_frame().await;
 }

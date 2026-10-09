@@ -1,5 +1,6 @@
 use std::time::{self, Instant};
 use log::info;
+use macroquad::input::{is_key_down, is_key_released};
 use numfmt::{Formatter, Precision, Scales};
 use clap::Parser;
 
@@ -81,6 +82,8 @@ async fn main() -> std::io::Result<()> {
     let mut start = time::Instant::now();
     let mut fps = 0.0;
 
+    let mut show_profiling = debug;
+
     loop {
         let step_start = time::Instant::now();
         simulation::step_leapfrog(&mut state);
@@ -106,6 +109,10 @@ async fn main() -> std::io::Result<()> {
             ms_ctr = 0.0;
         }
 
-        renderer::render(&RenderState {sim: state.clone(), physics_time: step_ms, fps}).await;
+        if is_key_released(macroquad::input::KeyCode::F3) {
+            show_profiling = !show_profiling;
+        }
+
+        renderer::render(&RenderState {sim: state.clone(), physics_time: step_ms, fps, show_profiling}).await;
     }
 }
